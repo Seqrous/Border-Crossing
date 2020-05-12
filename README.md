@@ -1,2 +1,3 @@
 # Border-Crossing
-Analyse the data of people crossing US border over last 20 years
+Analysis of a dataset found on Kaggle (https://www.kaggle.com/divyansh22/us-border-crossing-data)
+The goal is to just go throught the data, modify it, highlight the most important information and plot it.
