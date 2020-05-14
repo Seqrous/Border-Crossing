@@ -11,6 +11,7 @@ import calendar
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 # forecasting imports
 import tensorflow as tf
 from tensorflow.keras import Sequential
@@ -196,10 +197,13 @@ plt.show()
 
 """ Forecasting for 2020 using Keras' LSTM """
 
+# get the necessary data
 data = dataset[['Value', 'Month', 'Year']]
 years = list(data['Year'].value_counts().index)
 years.sort()
 
+# for each month in year calculate the total sum of border crossings
+# to the sum append its year and month
 feed_data = pd.DataFrame()
 for year in years:
     data_each_year = data[data['Year'] == year]
@@ -208,18 +212,39 @@ for year in years:
     month_in_year['Year'] = year
     feed_data = pd.concat([feed_data, month_in_year], ignore_index=True)
 
-# feed_data_encoded = pd.get_dummies(feed_data, ['Month'])
+# convert month abbreviation to numerical value
+def month_converter(month):
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return months.index(month) + 1
 
-# encode months
-feed_data_encoded = feed_data.copy()
-label_encoder = LabelEncoder()
-feed_data_encoded['Month'] = label_encoder.fit_transform(feed_data_encoded['Month'])
-# increment so the numbers correlate to actual months
-feed_data_encoded.loc[:, 'Month'] +=1
+# sort by year, month
+feed_data['Month'] = feed_data['Month'].apply(lambda x: month_converter(x))
+feed_data = feed_data.sort_values(['Year', 'Month'], ascending=['True', 'True'])
+feed_data = feed_data.reset_index()
 
-# scale
+# get necessary data
+feed_data_value = feed_data['Value']
+feed_data_scaled = np.array(feed_data_value).reshape(-1, 1)
+
+# Scaling
 scaler = MinMaxScaler()
-feed_data_scaled = scaler.fit_transform(feed_data_encoded)
+feed_data_scaled = scaler.fit_transform(feed_data_scaled)
+
+# split into test and train sets
+train, test = train_test_split(feed_data_scaled, test_size=0.3, shuffle=False)
+# convert an array of values into a dataset matrix
+def array_to_matrix_with_shift(dataset, look_back=1):
+    data_X = []
+    data_y = []
+    for i in range(len(dataset)-look_back):
+        element = dataset[i:(i+look_back), 0]
+        data_X.append(element)
+        data_y.append(dataset[i+look_back, 0])
+    return np.array(data_X), np.array(data_y)
+
+look_back = 1
+train_X, train_y = array_to_matrix_with_shift(np.array(train).reshape(-1, 1))
+test_X, test_y = array_to_matrix_with_shift(np.array(test).reshape(-1, 1))
 
 # LSTM expects 3 inputs
 # samples 
@@ -227,32 +252,22 @@ feed_data_scaled = scaler.fit_transform(feed_data_encoded)
 # features - month and  year?
 # all in all, (sample, time_step, (feature1, feature2, ...))
 
-# split into train and test sets
-n_years = 14
-n_months = n_years * 12
-# first 18 years
-train = feed_data_scaled[:n_months, :]
-# what's remaining 
-test = feed_data_scaled[n_months:, :] # ignoring 2 months from 2020
+train_X = np.reshape(train_X, (train_X.shape[0], 1, train_X.shape[1]))
+test_X = np.reshape(test_X, (test_X.shape[0], 1, test_X.shape[1]))
 
-# split into input and outputs
-train_X, train_y = train[:, 1:], train[:, 0]
-test_X, test_y = test[:, 1:], test[:, 0]
+# train_X - Jan 1996 - Oct 2012
+# test_X - Dec 2012 - Feb 2020
 
-# reshape input to be 3D [samples, timesteps, features]
-train_X = train_X.reshape(train_X.shape[0], 1, train_X.shape[1])
-test_X = test_X.reshape(test_X.shape[0], 1, test_X.shape[1])
-print(train_X.shape, train_y.shape, test_X.shape, test_y.shape)
-
+""" Training the model """
 # neural network using LSTM
 model = Sequential()
-model.add(LSTM(20, input_shape=(train_X.shape[1], train_X.shape[2]), dropout=0.1, go_backwards=True))
+model.add(LSTM(20, input_shape=(1, look_back)))
 model.add(Dense(1))
 
 model.compile(optimizer='adam',
               loss='mae')
 
-r = model.fit(train_X, train_y, epochs=100, validation_data=(test_X, test_y))
+r = model.fit(train_X, train_y, epochs=40, batch_size=5, validation_data=(test_X, test_y))
 
 # plot history
 plt.plot(r.history['loss'], label='loss')
@@ -260,6 +275,7 @@ plt.plot(r.history['val_loss'], label='val_loss')
 plt.legend()
 plt.show()
 
+""" Prediction/Evaluation """
 # make a prediction
 yhat = model.predict(test_X)
 test_X = test_X.reshape((test_X.shape[0], test_X.shape[2]))
@@ -279,12 +295,13 @@ inv_y = inv_y[:,0]
 rmse = np.sqrt(mean_squared_error(inv_y, inv_yhat))
 print('Test RMSE: %.3f' % rmse)
 
-# months in the order of train data
-# that is Jan 2010 - Dec 2020 and extra Jan and Feb for 2020
-month_idx_start = np.arange(1, 13)
-month_idx_start = np.tile(month_idx_start, 10).reshape(-1, 1)
-month_idx_end = np.array([[1], [2]])
-full_months = np.concatenate((month_idx_start, month_idx_end))
+# months corresponding to predicted values
+month_idx_start = np.array([[12]]) # wraps up 2012
+month_idx_mid = np.arange(1, 13) # returns 1-12
+# months for 2013, 2014, 2015, 2016, 2017, 2018, 2019
+month_idx_mid = np.tile(month_idx_mid, 7).reshape(-1, 1)
+month_idx_end = np.array([[1]]) # wraps up 2020 (there's only Jan in 2020)
+full_months = np.concatenate((month_idx_start, month_idx_mid, month_idx_end))
 
 # prepare inverted y data
 inv_y_df = pd.DataFrame(inv_y, columns=['Value'])
@@ -302,10 +319,13 @@ inv_yhat_df['Type'] = 'Predicted'
 
 full_results_df = pd.concat([inv_y_df, inv_yhat_df])
 
-# append years, that is 2010 - 2019 (12 times each) + 2 times 2020
-years = np.array([2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019])
-years = np.repeat(years, 12)
-last_years = np.array([2020, 2020])
+start_years = np.array([2012])
+# append years, that is 2013 - 2019 (12 times each) + 2 times 2020
+mid_years = np.array([2013, 2014, 2015, 2016, 2017, 2018, 2019])
+mid_years = np.repeat(mid_years, 12)
+last_years = np.array([2020])
+years = []
+years = np.append(start_years, mid_years)
 years = np.append(years, last_years)
 years = np.tile(years, 2)
 
