@@ -6,6 +6,7 @@ I have decided to try and forecast the data using Keras' LSTM as an extra task.
 After having watched a course on Time Series forecasting, I have a concern that the implementation may be wrong and so, I will try to fix it soon
 
 ## Prerequisites:
+Script was run using Python 3.8.2
 - scikit-learn,
 - tensorflow,
 - numpy,
