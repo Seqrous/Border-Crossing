@@ -13,6 +13,7 @@ After having watched a course on Time Series forecasting, I have a concern that 
 - pandas
 
 ## Installing:
+On Windows, open Command Prompt and run each of the commands
 ```
 - pip install -U scikit-learn
 - pip install --upgrade tensorflow
