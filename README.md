@@ -10,7 +10,8 @@ After having watched a course on Time Series forecasting, I have a concern that 
 - tensorflow,
 - numpy,
 - seaborn,
-- pandas
+- pandas,
+- matplotlib
 
 ## Installing:
 On Windows, open Command Prompt and run each of the commands
@@ -20,4 +21,5 @@ On Windows, open Command Prompt and run each of the commands
 - pip install numpy
 - pip install seaborn 
 - pip install pandas
+- pip install matplotlib
 ```
